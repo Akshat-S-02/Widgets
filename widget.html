@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Session Attendance Widget</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+  <script src="https://js.zohostatic.com/crm/v2/SDK.js"></script>
+  <script src="https://live.zwidgets.com/js-sdk/1.4/ZohoEmbededAppSDK.min.js"></script>
+</head>
+<body style= "height: 100%; width: 100%;" >
+   <div id="messageContainer" class="message-container hidden"></div>
+  <div class="container" style= "height: 100%; width: 100%;" >
+    <div class="session-info-header">
+      <h2>Session Details</h2>
+      <div class="button-group header-buttons">
+        <button id="submitButton" onclick="submitAttendance()" class="hidden" disabled>
+          <span id="buttonText">Submit Attendance</span>
+          <div id="buttonSpinner" class="button-spinner hidden"></div>
+        </button>
+    
+        <button id="massUpdateButton" onclick="massUpdate()" class="hidden" disabled>
+          Mass Update Selected
+        </button>
+      </div>
+    </div>
+    
+    <div class="session-info">
+      <div id="sessionInfo">Loading session details...</div>
+    </div>
+    
+    <div class="loading-indicator" id="loadingIndicator">
+      <div class="spinner"></div>
+      <p>Loading attendance records...</p>
+    </div>
+
+    <div class="no-records-message hidden" id="noRecordsMessage">
+      <div class="no-records-icon">📭</div>
+      <h3>No Records Found</h3>
+      <p>There are no attendance records for this session.</p>
+    </div>
+
+    <div class="table-wrapper">
+      <table id="attendanceTable" class="hidden">
+        <thead>
+          <tr>
+            <th><input type="checkbox" id="selectAll" onclick="toggleSelectAll(this)"></th>
+            <th>Attendance Name</th>
+            <th>Contact Name</th>
+            <th>Deal Name</th>
+            <th>Session Attended</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+      
+    </div>
+
+    <div class="pagination-controls hidden" id="paginationControls">
+      <div class="pagination-left">
+        <button onclick="prevPage()" id="prevButton" title="Previous Page">←</button>
+      </div>
+      <div class="pagination-center" id="pageInfo">Page 1 of 1</div>
+      <div class="pagination-right">
+        <button onclick="nextPage()" id="nextButton" title="Next Page">→</button>
+      </div>
+    </div>
+       
+
+    <div class="button-group">
+    <button id="submitButton" onclick="submitAttendance()" class="hidden" disabled>
+      <span id="buttonText">Submit Attendance</span>
+      <div id="buttonSpinner" class="button-spinner hidden"></div>
+    </button>
+
+    <button id="massUpdateButton" onclick="massUpdate()" class="hidden" disabled>
+      Mass Update Selected
+    </button>
+    </div>
+
+
+  </div>
+
+
+
+  <div id="massUpdateModal" class="modal-overlay hidden">
+    <div class="modal-content">
+      <h3>Mass Update Attendance</h3>
+      <p>Set <strong>Session Attended</strong> value for selected records:</p>
+      <select id="massUpdateValue">
+        <option value="" >-- Select --</option>
+        <option value="Yes">Yes</option>
+        <option value="No">No</option>
+      </select>
+      <div class="modal-buttons">
+        <button onclick="applyMassUpdate()">Apply</button>
+        <button onclick="closeMassUpdateModal()">Cancel</button>
+      </div>
+    </div>
+  </div>
+  
+
+
+
+
+
+
+  <script src="widget.js"></script>
+</body>
+</html>
+
+<!-- <!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Session Attendance Widget</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+  <script src="https://js.zohostatic.com/crm/v2/SDK.js"></script>
+  <script src="https://live.zwidgets.com/js-sdk/1.4/ZohoEmbededAppSDK.min.js"></script>
+</head>
+<body style= "height: 100%; width: 100%;" >
+   <div id="messageContainer" class="message-container hidden"></div>
+  <div class="container" style= "height: 100%; width: 100%;" >
+    <div class="session-info-header">
+      <h2>Session Details</h2>
+      <div class="button-group small-buttons">
+        <button id="submitButton" onclick="submitAttendance()" class="hidden" disabled>
+          <span id="buttonText">Submit Attendance</span>
+          <div id="buttonSpinner" class="button-spinner hidden"></div>
+        </button>
+    
+        <button id="massUpdateButton" onclick="massUpdate()" class="hidden" disabled>
+          Mass Update Selected
+        </button>
+      </div>
+    </div>
+    
+    <div class="session-info">
+      <div id="sessionInfo">Loading session details...</div>
+    </div>
+    
+
+   
+    <div id="loadingIndicator" class="loading-indicator">
+      <div class="spinner"></div>
+      <p>Loading attendance records...</p>
+    </div>
+
+  
+    <div id="noRecordsMessage" class="no-records-message hidden">
+      <div class="no-records-icon">📋</div>
+      <h3>No Attendance Records Found</h3>
+      <p>There are no attendance records available for this session.</p>
+    </div>
+
+    <div class="table-wrapper">
+      <table id="attendanceTable" class="hidden">
+        <thead>
+          <tr>
+            <th><input type="checkbox" id="selectAll" onclick="toggleSelectAll(this)" /></th>
+            <th>Attendance</th>
+            <th>Contact</th>
+            <th>Deal</th>
+            <th>Session Attended</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+      
+    </div>
+
+    <div class="pagination-controls hidden" id="paginationControls">
+      <div class="pagination-left">
+        <button onclick="prevPage()" id="prevButton" title="Previous Page">←</button>
+      </div>
+      <div class="pagination-center" id="pageInfo">Page 1 of 1</div>
+      <div class="pagination-right">
+        <button onclick="nextPage()" id="nextButton" title="Next Page">→</button>
+      </div>
+    </div>
+       
+
+    <div class="button-group">
+    <button id="submitButton" onclick="submitAttendance()" class="hidden" disabled>
+      <span id="buttonText">Submit Attendance</span>
+      <div id="buttonSpinner" class="button-spinner hidden"></div>
+    </button>
+
+    <button id="massUpdateButton" onclick="massUpdate()" class="hidden" disabled>
+      Mass Update Selected
+    </button>
+    </div>
+
+
+  </div>
+
+  <div id="massUpdateModal" class="modal-overlay hidden">
+    <div class="modal-content">
+      <h3>Mass Update Attendance</h3>
+      <p>Set <strong>Session Attended</strong> value for selected records:</p>
+      <select id="massUpdateValue">
+        <option value="">-- Select --</option>
+        <option value="Yes">Yes</option>
+        <option value="No">No</option>
+      </select>
+      <div class="modal-buttons">
+        <button onclick="applyMassUpdate()">Apply</button>
+        <button onclick="closeMassUpdateModal()">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="widget.js"></script>
+</body>
+</html> -->
