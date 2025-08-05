@@ -1,0 +1,796 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>User-Based Scheduling Report</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/select2/4.1.0-rc.0/css/select2.min.css" />
+  <script src="https://js.zohostatic.com/creator/widgets/version/1.0/widgetsdk-min.js"></script>
+  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/select2/4.1.0-rc.0/js/select2.min.js"></script>
+  <style>
+    body { font-family: Verdana; margin: 20px; }
+    .title { font-size: 24px; font-weight: bold; margin-bottom: 10px; }
+    .header-container {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 15px; padding: 10px; background: #f8f9fa;
+      border-radius: 8px; flex-wrap: wrap; gap: 10px;
+    }
+    .week-display { font-size: 20px; font-weight: bold; color: #333; }
+    .nav-buttons, .apply-filter-btn {
+      font-size: 14px; cursor: pointer; border-radius: 5px;
+      padding: 6px 10px; border: 1px solid #ccc; margin-right: 5px;
+    }
+    .apply-filter-btn {
+      background: #007bff; color: white; border: none;
+    }
+    .apply-filter-btn:hover { background: #0056b3; }
+    .date-picker { font-size: 14px; padding: 4px; border-radius: 5px; }
+    table {
+      width: 100%; border-collapse: collapse; margin-top: 10px;
+      table-layout: fixed;
+    }
+    th, td {
+      border: 1px solid #ddd; padding: 6px; text-align: center;
+      font-size: 13px;
+    }
+    th { background: #f4f4f4; }
+    .event {
+      color: white; padding: 4px 5px; border-radius: 4px;
+      margin: 2px 0; display: block; text-decoration: none;
+      font-size: 12px; white-space: nowrap; overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .message-box {
+      background: #fce4e4; border: 1px solid #f5c2c2;
+      color: #b71c1c; padding: 10px 15px; margin-bottom: 10px;
+      border-radius: 6px; display: none;
+    }
+    #userFilter, #statusFilter {
+      min-width: 180px;
+    }
+  </style>
+</head>
+<body>
+
+<div class="title">User-Based Scheduling Report</div>
+<div id="message-box" class="message-box"></div>
+
+<div class="header-container">
+  <span class="week-display" id="weekRange"></span>
+  <div>
+    <select id="userFilter" multiple></select>
+    <select id="statusFilter" multiple></select>
+    <button class="apply-filter-btn" onclick="applyUserFilter()">Apply Filter</button>
+    <button class="nav-buttons" onclick="changeWeek(-1)">❮</button>
+    <button class="nav-buttons" onclick="changeWeek(1)">❯</button>
+    <input type="date" class="date-picker" id="weekPicker" onchange="selectWeek()">
+  </div>
+</div>
+
+<table id="schedule-table">
+  <thead><tr><th>User</th></tr></thead>
+  <tbody></tbody>
+</table>
+
+<script>
+  let currentDate = new Date();
+  const users = [];
+  const events = [];
+  const statusColors = {
+    "Completed": "green", "Booked": "blue", "Blocked": "red",
+    "Available": "purple", "Unavailable": "gray"
+  };
+
+  $(document).ready(() => {
+    $('#userFilter').select2({ width: '200px', placeholder: 'Select Members', closeOnSelect: false });
+    $('#statusFilter').select2({ width: '180px', placeholder: 'Select Status', closeOnSelect: false });
+  });
+
+  function getWeekRange(baseDate) {
+    const first = new Date(baseDate);
+    const last = new Date(baseDate);
+    first.setDate(baseDate.getDate() - baseDate.getDay() + 1);
+    last.setDate(first.getDate() + 6);
+    return { startDate: formatDate(first), endDate: formatDate(last) };
+  }
+
+  function getWeekDates(baseDate) {
+    const start = new Date(baseDate);
+    start.setDate(baseDate.getDate() - baseDate.getDay() + 1);
+    return [...Array(7).keys()].map(i => {
+      const d = new Date(start);
+      d.setDate(start.getDate() + i);
+      return {
+        dateString: formatDate(d),
+        displayDate: d.toDateString().slice(0, 10)
+      };
+    });
+  }
+
+  function updateWeekRange(weekDates) {
+    document.getElementById("weekRange").textContent = `${weekDates[0].displayDate} - ${weekDates[6].displayDate}`;
+  }
+
+  function formatDate(dateObj) {
+    return dateObj.toISOString().split("T")[0];
+  }
+
+  function convertToISO(dateStr) {
+    const [day, monStr, year] = dateStr.split('-');
+    const months = {
+      Jan: '01', Feb: '02', Mar: '03', Apr: '04', May: '05', Jun: '06',
+      Jul: '07', Aug: '08', Sep: '09', Oct: '10', Nov: '11', Dec: '12'
+    };
+    return `${year}-${months[monStr]}-${day.padStart(2, '0')}`;
+  }
+
+  function showError(message) {
+    const box = document.getElementById("message-box");
+    box.textContent = message;
+    box.style.display = "block";
+  }
+
+  function clearError() {
+    const box = document.getElementById("message-box");
+    box.textContent = "";
+    box.style.display = "none";
+  }
+
+  async function getRecords() {
+    const { startDate, endDate } = getWeekRange(currentDate);
+    clearError();
+
+    const userConfig = {
+      appName: "wordsmith-app",
+      reportName: "All_User_Details",
+      criteria: "(Role != \"Portal User\")",
+      page: 1, pageSize: 200
+    };
+    const eventConfig = {
+      appName: "wordsmith-app",
+      reportName: "All_Scheduling_Databases",
+      criteria: `(Date_field >= "${startDate}" && Date_field <= "${endDate}")`,
+      page: 1, pageSize: 200
+    };
+
+    try {
+      const userResponse = await ZOHO.CREATOR.API.getAllRecords(userConfig);
+      if (userResponse.code !== 3000) throw new Error("User records not found.");
+      users.length = 0;
+      const userFilter = $("#userFilter").empty();
+      userResponse.data.forEach(record => {
+        const name = record.Name.display_value.trim();
+        users.push(name);
+        userFilter.append(new Option(name, name));
+      });
+      userFilter.trigger('change');
+    } catch (error) {
+      showError("Error fetching users. Please try again later.");
+      console.error("User fetch failed:", error);
+      return;
+    }
+
+    try {
+      const eventResponse = await ZOHO.CREATOR.API.getAllRecords(eventConfig);
+      events.length = 0;
+      const statusSet = new Set();
+      if (eventResponse.code === 3000) {
+        eventResponse.data.forEach(record => {
+          const status = record.Status;
+          statusSet.add(status);
+          events.push({
+            user: record.User_Name.display_value.trim(),
+            startDate: convertToISO(record.Date_field),
+            slot: record.Slot,
+            title: record.Title_Summary,
+            status: status,
+            link: `#Form:Scheduling_Database?recLinkID=${record.ID}&viewLinkName=All_Scheduling_Databases&zc_LoadIn=dialog`
+          });
+        });
+
+        const statusFilter = $("#statusFilter").empty();
+        Array.from(statusSet).forEach(status => {
+          statusFilter.append(new Option(status, status));
+        });
+        statusFilter.trigger('change');
+      }
+    } catch (error) {
+      showError("Error fetching scheduling data. Please try again later.");
+      console.error("Event fetch failed:", error);
+    }
+
+    generateTable();
+  }
+
+  function applyUserFilter() {
+    const selectedUsers = $("#userFilter").val();
+    const selectedStatuses = $("#statusFilter").val();
+    generateTable(
+      selectedUsers.length ? selectedUsers : users,
+      selectedStatuses.length ? selectedStatuses : Object.keys(statusColors)
+    );
+  }
+
+  function generateTable(filteredUsers = users, filteredStatuses = Object.keys(statusColors)) {
+    const weekDates = getWeekDates(currentDate);
+    updateWeekRange(weekDates);
+    const thead = document.querySelector("#schedule-table thead tr");
+    const tbody = document.querySelector("#schedule-table tbody");
+    thead.innerHTML = "<th>User</th>";
+    tbody.innerHTML = "";
+
+    weekDates.forEach(date => {
+      const th = document.createElement("th");
+      th.textContent = date.displayDate;
+      thead.appendChild(th);
+    });
+
+    filteredUsers.forEach(user => {
+      const row = document.createElement("tr");
+      const userCell = document.createElement("td");
+      userCell.textContent = user;
+      row.appendChild(userCell);
+
+      weekDates.forEach(date => {
+        const cell = document.createElement("td");
+        const userEvents = events.filter(e =>
+          e.user === user && e.startDate === date.dateString && filteredStatuses.includes(e.status)
+        );
+        userEvents.forEach(ev => {
+          const div = document.createElement("a");
+          div.href = ev.link;
+          div.className = "event";
+          div.style.backgroundColor = statusColors[ev.status] || "gray";
+          div.textContent = `${ev.title} (${ev.slot})`;
+          div.onclick = () => ZOHO.CREATOR.UTIL.navigateParentURL({
+            action: "open", url: ev.link, window: "same"
+          });
+          cell.appendChild(div);
+        });
+        row.appendChild(cell);
+      });
+
+      tbody.appendChild(row);
+    });
+
+    adjustHeight();
+  }
+
+  function adjustHeight() {
+    const bodyHeight = document.body.scrollHeight;
+    // ZOHO.CREATOR.setHeight(bodyHeight + 20);
+  }
+
+  async function changeWeek(dir) {
+    currentDate.setDate(currentDate.getDate() + (7 * dir));
+    await getRecords();
+  }
+
+  async function selectWeek() {
+    const picker = document.getElementById("weekPicker");
+    const picked = new Date(picker.value);
+    if (!isNaN(picked)) {
+      currentDate = picked;
+      await getRecords();
+    }
+  }
+
+  ZOHO.CREATOR.init().then(() => {
+    getRecords();
+  });
+</script>
+
+</body>
+</html>
+
+
+
+<!-- <!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>User-Based Scheduling Report</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/select2/4.1.0-rc.0/css/select2.min.css" />
+  <script src="https://js.zohostatic.com/creator/widgets/version/1.0/widgetsdk-min.js"></script>
+  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/select2/4.1.0-rc.0/js/select2.min.js"></script>
+  <style>
+    body { font-family: Verdana; margin: 20px; }
+    .title { font-size: 24px; font-weight: bold; margin-bottom: 10px; }
+    .header-container { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; padding: 10px; background: #f8f9fa; border-radius: 8px; flex-wrap: wrap; gap: 10px; }
+    .week-display { font-size: 20px; font-weight: bold; color: #333; }
+    .nav-buttons, .apply-filter-btn { font-size: 14px; cursor: pointer; border-radius: 5px; padding: 6px 10px; border: 1px solid #ccc; margin-right: 5px; }
+    .apply-filter-btn { background: #007bff; color: white; border: none; }
+    .apply-filter-btn:hover { background: #0056b3; }
+    .date-picker { font-size: 14px; padding: 4px; border-radius: 5px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; table-layout: fixed; }
+    th, td { border: 1px solid #ddd; padding: 6px; text-align: center; font-size: 13px; }
+    th { background: #f4f4f4; }
+    .event { color: white; padding: 4px 5px; border-radius: 4px; margin: 2px 0; display: block; text-decoration: none; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  </style>
+</head>
+<body>
+
+<div class="title">User-Based Scheduling Report</div>
+<div class="header-container">
+  <span class="week-display" id="weekRange"></span>
+  <div>
+    <select id="userFilter" multiple></select>
+    <button class="apply-filter-btn" onclick="applyUserFilter()">Apply Filter</button>
+    <button class="nav-buttons" onclick="changeWeek(-1)">❮</button>
+    <button class="nav-buttons" onclick="changeWeek(1)">❯</button>
+    <input type="date" class="date-picker" id="weekPicker" onchange="selectWeek()">
+  </div>
+</div>
+
+<table id="schedule-table">
+  <thead><tr><th>User</th></tr></thead>
+  <tbody></tbody>
+</table>
+
+<script>
+  let currentDate = new Date();
+  const users = [];
+  const events = [];
+
+  const statusColors = {
+    "Completed": "green", "Booked": "blue", "Blocked": "red",
+    "Available": "purple", "Unavailable": "gray"
+  };
+
+  $(document).ready(() => {
+    $('#userFilter').select2({ width: '200px', placeholder: 'Select Members', closeOnSelect: false });
+  });
+
+  function getWeekRange(baseDate) {
+    const first = new Date(baseDate);
+    const last = new Date(baseDate);
+    first.setDate(baseDate.getDate() - baseDate.getDay() + 1);
+    last.setDate(first.getDate() + 6);
+    return { startDate: formatDate(first), endDate: formatDate(last) };
+  }
+
+  function getWeekDates(baseDate) {
+    const start = new Date(baseDate);
+    start.setDate(baseDate.getDate() - baseDate.getDay() + 1);
+    return [...Array(7).keys()].map(i => {
+      const d = new Date(start);
+      d.setDate(start.getDate() + i);
+      return {
+        dateString: formatDate(d),
+        displayDate: d.toDateString().slice(0, 10)
+      };
+    });
+  }
+
+  function updateWeekRange(weekDates) {
+    document.getElementById("weekRange").textContent = `${weekDates[0].displayDate} - ${weekDates[6].displayDate}`;
+  }
+
+  function formatDate(dateObj) {
+    return dateObj.toISOString().split("T")[0];
+  }
+
+  function convertToISO(dateStr) {
+    const [day, monStr, year] = dateStr.split('-');
+    const months = {
+      Jan: '01', Feb: '02', Mar: '03', Apr: '04', May: '05', Jun: '06',
+      Jul: '07', Aug: '08', Sep: '09', Oct: '10', Nov: '11', Dec: '12'
+    };
+    return `${year}-${months[monStr]}-${day.padStart(2, '0')}`;
+  }
+
+  async function getRecords() {
+    const { startDate, endDate } = getWeekRange(currentDate);
+
+    const userConfig = {
+      appName: "wordsmith-app",
+      reportName: "All_User_Details",
+      criteria: "(Role != \"Portal User\")",
+      page: 1, pageSize: 200
+    };
+    const eventConfig = {
+      appName: "wordsmith-app",
+      reportName: "All_Scheduling_Databases",
+      criteria: `(Date_field >= "${startDate}" && Date_field <= "${endDate}")`,
+      page: 1, pageSize: 200
+    };
+
+    try {
+      const userResponse = await ZOHO.CREATOR.API.getAllRecords(userConfig);
+      if (userResponse.code !== 3000) throw new Error("User records not found.");
+      users.length = 0;
+      const userFilter = $("#userFilter").empty();
+      userResponse.data.forEach(record => {
+        const name = record.Name.display_value.trim();
+        users.push(name);
+        userFilter.append(new Option(name, name));
+      });
+      userFilter.trigger('change');
+    } catch (error) {
+      alert("Error fetching users. Please try again later.");
+      console.error("User fetch failed:", error);
+      return;
+    }
+
+    try {
+      const eventResponse = await ZOHO.CREATOR.API.getAllRecords(eventConfig);
+      events.length = 0;
+      if (eventResponse.code === 3000) {
+        eventResponse.data.forEach(record => {
+          events.push({
+            user: record.User_Name.display_value.trim(),
+            startDate: convertToISO(record.Date_field),
+            slot: record.Slot,
+            title: record.Title_Summary,
+            status: record.Status,
+            link: `#Form:Scheduling_Database?recLinkID=${record.ID}&viewLinkName=All_Scheduling_Databases&zc_LoadIn=dialog`
+          });
+        });
+      }
+    } catch (error) {
+      alert("Error fetching scheduling data. Please try again later.");
+      console.error("Event fetch failed:", error);
+    }
+
+    generateTable();
+  }
+
+  function applyUserFilter() {
+    const selected = $("#userFilter").val();
+    generateTable(selected.length ? selected : users);
+  }
+
+  function generateTable(filteredUsers = users) {
+    const weekDates = getWeekDates(currentDate);
+    updateWeekRange(weekDates);
+    const thead = document.querySelector("#schedule-table thead tr");
+    const tbody = document.querySelector("#schedule-table tbody");
+    thead.innerHTML = "<th>User</th>";
+    tbody.innerHTML = "";
+
+    weekDates.forEach(date => {
+      const th = document.createElement("th");
+      th.textContent = date.displayDate;
+      thead.appendChild(th);
+    });
+
+    filteredUsers.forEach(user => {
+      const row = document.createElement("tr");
+      const userCell = document.createElement("td");
+      userCell.textContent = user;
+      row.appendChild(userCell);
+
+      weekDates.forEach(date => {
+        const cell = document.createElement("td");
+        const userEvents = events.filter(e => e.user === user && e.startDate === date.dateString);
+        userEvents.forEach(ev => {
+          const div = document.createElement("a");
+          div.href = ev.link;
+          div.className = "event";
+          div.style.backgroundColor = statusColors[ev.status] || "gray";
+          div.textContent = `${ev.title} (${ev.slot})`;
+          div.onclick = () => ZOHO.CREATOR.UTIL.navigateParentURL({
+            action: "open",
+            url: ev.link,
+            window: "same"
+          });
+          cell.appendChild(div);
+        });
+        row.appendChild(cell);
+      });
+
+      tbody.appendChild(row);
+    });
+
+    adjustHeight();
+  }
+
+  function adjustHeight() {
+    const bodyHeight = document.body.scrollHeight;
+    // ZOHO.CREATOR.setHeight(bodyHeight + 20);
+  }
+
+  async function changeWeek(dir) {
+    currentDate.setDate(currentDate.getDate() + (7 * dir));
+    await getRecords();
+  }
+
+  async function selectWeek() {
+    const picker = document.getElementById("weekPicker");
+    const picked = new Date(picker.value);
+    if (!isNaN(picked)) {
+      currentDate = picked;
+      await getRecords();
+    }
+  }
+
+  ZOHO.CREATOR.init().then(() => {
+    getRecords();
+  });
+</script>
+
+</body>
+</html> -->
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<!-- <!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>User-Based Scheduling Report</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/select2/4.1.0-rc.0/css/select2.min.css" />
+  <script src="https://js.zohostatic.com/creator/widgets/version/1.0/widgetsdk-min.js"></script>
+  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/select2/4.1.0-rc.0/js/select2.min.js"></script>
+  <style>
+    body { font-family: Verdana; margin: 20px; }
+    .title { font-size: 24px; font-weight: bold; margin-bottom: 10px; }
+    .header-container { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; padding: 10px; background: #f8f9fa; border-radius: 8px; }
+    .week-display { font-size: 20px; font-weight: bold; color: #333; }
+    .nav-buttons, .apply-filter-btn { font-size: 16px; cursor: pointer; border-radius: 5px; padding: 8px 12px; border: 1px solid #ccc; margin-right: 5px; }
+    .apply-filter-btn { background: #007bff; color: white; border: none; }
+    .apply-filter-btn:hover { background: #0056b3; }
+    .date-picker { font-size: 16px; padding: 5px; border-radius: 5px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+    th, td { border: 1px solid #ddd; padding: 10px; text-align: center; }
+    th { background: #f4f4f4; }
+    .event { background-color: green; color: white; padding: 5px; border-radius: 4px; margin: 3px 0; display: block; text-decoration: none; }
+  </style>
+</head>
+<body>
+
+<div class="title">User-Based Scheduling Report</div>
+<div class="header-container">
+  <span class="week-display" id="weekRange"></span>
+  <div>
+    <select id="userFilter" multiple></select>
+    <button class="apply-filter-btn" onclick="applyUserFilter()">Apply Filter</button>
+    <button class="nav-buttons" onclick="changeWeek(-1)">❮</button>
+    <button class="nav-buttons" onclick="changeWeek(1)">❯</button>
+    <input type="date" class="date-picker" id="weekPicker" onchange="selectWeek()">
+  </div>
+</div>
+
+<table id="schedule-table">
+  <thead><tr><th>User</th></tr></thead>
+  <tbody></tbody>
+</table>
+
+<script>
+  let currentDate = new Date();
+  const users = [];
+  const events = [];
+
+  const statusColors = {
+    "Completed": "green", "Booked": "blue", "Blocked": "red",
+    "Available": "magenta", "Unavailable": "gray"
+  };
+
+  $(document).ready(() => {
+    $('#userFilter').select2({ width: '200px', placeholder: 'Select Members', closeOnSelect: false });
+  });
+
+  function getWeekRange(baseDate) {
+    const first = new Date(baseDate);
+    const last = new Date(baseDate);
+    first.setDate(baseDate.getDate() - baseDate.getDay() +1 );  // Monday
+    last.setDate(first.getDate() + 7);  // Sunday
+    return { startDate: formatDate(first), endDate: formatDate(last) };
+  }
+
+
+  function getWeekDates(baseDate) {
+    const start = new Date(baseDate);
+    start.setDate(baseDate.getDate() - baseDate.getDay()+1 );
+    return [...Array(7).keys()].map(i => {
+      const d = new Date(start);
+      d.setDate(start.getDate() + i );
+      return {
+        dateString: formatDate(d),
+        displayDate: d.toDateString().slice(0, 10)
+      };
+    });
+  }
+
+
+  function updateWeekRange(weekDates) {
+    document.getElementById("weekRange").textContent = `${weekDates[0].displayDate} - ${weekDates[6].displayDate}`;
+  }
+
+  function formatDate(dateObj) {
+    return dateObj.toISOString().split("T")[0];
+  }
+
+function convertToISO(dateStr) {
+  // Expects: '26-Apr-2025'
+  const [day, monStr, year] = dateStr.split('-');
+  const months = {
+    Jan: '01', Feb: '02', Mar: '03', Apr: '04', May: '05', Jun: '06',
+    Jul: '07', Aug: '08', Sep: '09', Oct: '10', Nov: '11', Dec: '12'
+  };
+  return `${year}-${months[monStr]}-${day.padStart(2, '0')}`;
+}
+
+
+  function parseZohoDate(zohoDateString) {
+    const parts = zohoDateString.split(" ");
+    const [day, monthStr, year] = parts[0].split("-");
+    const time = parts[1] || "00:00";
+    const monthMap = { Jan:"01", Feb:"02", Mar:"03", Apr:"04", May:"05", Jun:"06", Jul:"07", Aug:"08", Sep:"09", Oct:"10", Nov:"11", Dec:"12" };
+    return new Date(`${year}-${monthMap[monthStr]}-${day}T${time}:00`);
+  }
+
+  async function getRecords() {
+    const { startDate, endDate } = getWeekRange(currentDate);
+    const userConfig = {
+      appName: "wordsmith-app",
+      reportName: "All_User_Details",
+      criteria: "(Role != \"Portal User\")",
+      page: 1, pageSize: 200
+    };
+    const eventConfig = {
+      appName: "wordsmith-app",
+      reportName: "All_Scheduling_Databases",
+      criteria: `(Date_field >= "${startDate}" && Date_field <= "${endDate}")`,
+      page: 1, pageSize: 200
+    };
+
+    const userResponse = await ZOHO.CREATOR.API.getAllRecords(userConfig);
+    console.log(userResponse);
+    users.length = 0;
+    const userFilter = $("#userFilter").empty();
+    userResponse.data.forEach(record => {
+      const name = record.Name.display_value.trim();
+      users.push(name);
+      userFilter.append(new Option(name, name));
+    });
+    userFilter.trigger('change');
+
+    const eventResponse = await ZOHO.CREATOR.API.getAllRecords(eventConfig);
+    console.log(eventResponse);
+    events.length = 0;
+
+    if(eventResponse.code == 3000){
+      console.log("3000");
+    eventResponse.data.forEach(record => {
+      // const dateObj = parseZohoDate(record.Date_field);
+      events.push({
+        user: record.User_Name.display_value.trim(),
+        startDate: convertToISO(record.Date_field),
+        slot: record.Slot,
+        title: record.Title_Summary,
+        status: record.Status,
+        link: `#Form:Scheduling_Database?recLinkID=${record.ID}&viewLinkName=All_Scheduling_Databases&zc_LoadIn=dialog`
+      });
+    });
+
+  }else if(eventResponse.responseText.code == 3100){
+    // No records found;
+    console.log("3100");
+    events.length = 0;
+
+  }
+
+    generateTable();
+  }
+
+  function applyUserFilter() {
+    const selected = $("#userFilter").val();
+    generateTable(selected.length ? selected : users);
+  }
+
+  function generateTable(filteredUsers = users) {
+    const weekDates = getWeekDates(currentDate);
+    updateWeekRange(weekDates);
+    const thead = document.querySelector("#schedule-table thead tr");
+    const tbody = document.querySelector("#schedule-table tbody");
+    thead.innerHTML = "<th>User</th>";
+    tbody.innerHTML = "";
+
+    weekDates.forEach(date => {
+      const th = document.createElement("th");
+      th.textContent = date.displayDate;
+      thead.appendChild(th);
+    });
+
+    filteredUsers.forEach(user => {
+      const row = document.createElement("tr");
+      const userCell = document.createElement("td");
+      userCell.textContent = user;
+      row.appendChild(userCell);
+
+      weekDates.forEach(date => {
+        const cell = document.createElement("td");
+        const userEvents = events.filter(e => e.user == user && e.startDate == date.dateString );
+        
+        console.log(date.dateString);
+        console.log(userEvents);
+        userEvents.forEach(ev => {
+          const div = document.createElement("a");
+          div.href = ev.link;
+          div.className = "event";
+          div.style.backgroundColor = statusColors[ev.status] || "gray";
+          div.textContent = `${ev.title} (${ev.slot})`;
+          // div.target = "_blank";
+
+          const action = {
+                            action: "open",
+                            url: ev.link,
+                            window: "same" // This opens the URL in a new window/tab
+                            
+                          };
+
+          div.onclick = () => ZOHO.CREATOR.UTIL.navigateParentURL(action);
+
+
+          console.log(div);
+          cell.appendChild(div);
+        });
+        row.appendChild(cell);
+      });
+
+      tbody.appendChild(row);
+    });
+
+    adjustHeight();
+
+  }
+
+
+  function adjustHeight() {
+  const bodyHeight = document.body.scrollHeight;
+    // ZOHO.CREATOR.setHeight(bodyHeight + 20); // Add a little buffer
+  }
+
+
+  async function changeWeek(dir) {
+    currentDate.setDate(currentDate.getDate() + (7 * dir));
+    await getRecords();
+  }
+
+  async function selectWeek() {
+    const picker = document.getElementById("weekPicker");
+    const picked = new Date(picker.value);
+    if (!isNaN(picked)) {
+      currentDate = picked;
+      await getRecords();
+    }
+  }
+
+
+  var zsdkpromise = ZOHO.CREATOR.init();
+
+        zsdkpromise.then(function(data) {
+
+              console.log("This is inside init");
+              
+              getRecords();
+              
+
+                       
+
+        });
+
+
+
+</script>
+
+</body>
+</html> -->
