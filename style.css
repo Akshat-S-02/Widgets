@@ -1,0 +1,92 @@
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    padding: 24px;
+    /* background-color: #292727; */
+    color: #ffffff;
+  }
+  
+  h2 {
+    color: #FF7F31;
+    margin-bottom: 16px;
+    font-size: 24px;
+    border-left: 5px solid #FF7F31;
+    padding-left: 12px;
+  }
+  
+  #table-container,#table-container2 {
+    /* background-color: #292727; */
+    border-radius: 8px;
+    scrollbar-width: none;
+  }
+
+  #table-container{
+    overflow-x:scroll;
+  }
+  
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    min-width: max-content;
+    margin-top: 20px;
+    background-color: white;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    border-radius: 8px;
+    overflow: hidden;
+    color: #292727;
+  }
+  
+  th, td {
+    padding: 12px 16px;
+    text-align: left;
+  }
+  
+  th {
+    background-color: #104B59;
+    color: white;
+    font-weight: 600;
+  }
+  
+  tr:nth-child(even) {
+    background-color: #f3f3f3;
+  }
+  
+  tr:hover {
+    background-color: #FF7F31;
+    color: white;
+    transition: 0.3s ease;
+  }
+
+  tr:hover {
+    background-color: #FF7F31;
+    color: white;
+    transition: 0.3s ease;
+  }
+
+
+  
+  .no-data {
+    margin-top: 20px;
+    padding: 16px;
+    background-color: #fff3ed;
+    border: 1px solid #FF7F31;
+    color: #FF7F31;
+    border-radius: 6px;
+    font-style: italic;
+  }
+  .scroll-wrapper {
+    overflow-x: auto;
+    /* padding-left: 20px; */
+    /* padding-right: 20px; */
+  }
+  
+  #table-container {
+    /* background-color: #292727; */
+    border-radius: 8px;
+    min-width: 1000px;
+    display: inline-block;
+  }
+  
+  #table-container table {
+    min-width: 900px; /* Forces scroll to appear */
+  }
+  
